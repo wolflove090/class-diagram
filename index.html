@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>設計メーカー</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="brand">設計メーカー</div>
+      <button id="add-class-button" type="button">クラス追加</button>
+      <label class="toolbar-select">
+        関係
+        <select id="relationship-type-select">
+          <option value="inheritance">継承</option>
+          <option value="implementation">実装</option>
+          <option value="dependency">依存</option>
+          <option value="association" selected>関連</option>
+          <option value="aggregation">集約</option>
+          <option value="composition">コンポジション</option>
+        </select>
+      </label>
+      <button id="connect-mode-button" type="button" aria-pressed="false">接続</button>
+      <button id="delete-button" type="button">削除</button>
+      <button id="zoom-out-button" type="button">縮小</button>
+      <button id="zoom-in-button" type="button">拡大</button>
+      <button id="reset-view-button" type="button">表示リセット</button>
+      <button id="import-button" type="button">Mermaidインポート</button>
+      <button id="export-button" type="button">Mermaidエクスポート</button>
+      <button id="clear-button" type="button">クリア</button>
+      <span id="status-message" class="status-message" role="status"></span>
+    </header>
+
+    <main class="app-shell">
+      <section class="viewer">
+        <svg id="diagram-svg" aria-label="クラス図ビュワー" tabindex="0"></svg>
+      </section>
+      <aside id="inspector" class="inspector"></aside>
+    </main>
+
+    <div id="modal-root" class="modal-root" hidden></div>
+
+    <script src="./src/utils/dom.js"></script>
+    <script src="./src/models/diagramModel.js"></script>
+    <script src="./src/services/storageService.js"></script>
+    <script src="./src/services/layoutService.js"></script>
+    <script src="./src/services/mermaidSerializer.js"></script>
+    <script src="./src/services/mermaidParser.js"></script>
+    <script src="./src/views/svgRenderer.js"></script>
+    <script src="./src/views/inspectorView.js"></script>
+    <script src="./src/views/modalView.js"></script>
+    <script src="./src/controllers/diagramController.js"></script>
+    <script src="./src/main.js"></script>
+  </body>
+</html>
