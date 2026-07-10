@@ -79,7 +79,12 @@ class DiagramController {
       onClassClick: (classId) => this.handleClassClick(classId),
       onRelationshipClick: (relationshipId) => this.updateState(this.model.select(this.state, { type: "relationship", id: relationshipId }), false),
       onCanvasClick: () => this.updateState(this.model.select(this.state, null), false),
-      onClassDrag: (classId, position) => this.updateClassPosition(classId, position),
+      onClassRangeSelect: (classIds) => this.selectClasses(classIds),
+      onClassDrag: (positions) => this.updateClassPositions(positions),
+      onClassDragEnd: (classIds) => {
+        this.selectClasses(classIds);
+        this.save();
+      },
       onViewportChange: (viewport) => this.updateState(this.model.updateViewport(this.state, viewport), false),
       onZoom: (direction) => this.zoom(direction)
     });
@@ -144,13 +149,30 @@ class DiagramController {
     if (!this.state.selection) return;
     if (this.state.selection.type === "class") {
       this.updateState(this.model.removeClass(this.state, this.state.selection.id));
+    } else if (this.state.selection.type === "classes") {
+      this.updateState(this.state.selection.ids.reduce((state, classId) => this.model.removeClass(state, classId), this.state));
     } else {
       this.updateState(this.model.removeRelationship(this.state, this.state.selection.id));
     }
   }
 
-  updateClassPosition(classId, position) {
-    this.updateState(this.model.updateClass(this.state, classId, { position }), true, false);
+  selectClasses(classIds) {
+    if (classIds.length === 0) {
+      this.updateState(this.model.select(this.state, null), false);
+      return;
+    }
+    if (classIds.length === 1) {
+      this.updateState(this.model.select(this.state, { type: "class", id: classIds[0] }), false);
+      return;
+    }
+    this.updateState(this.model.select(this.state, { type: "classes", ids: classIds }), false);
+  }
+
+  updateClassPositions(positions) {
+    const nextState = positions.reduce((state, item) => (
+      this.model.updateClass(state, item.id, { position: item.position })
+    ), this.state);
+    this.updateState(nextState, false, false);
   }
 
   updateClassList(classId, key, updater) {

@@ -1,0 +1,56 @@
+classDiagram
+  %% mameid/Mermaid notation load test fixture
+  User --> Order : places
+  Order *-- OrderItem : contains
+  Order o-- Coupon : applies
+  Payment <|-- CreditCardPayment
+  Notifier <|.. EmailNotifier
+  Order ..> Notifier : sends receipt
+
+  class User {
+    +id string
+    +name string
+    -email string
+    +createOrder(items: OrderItem[]) Order
+  }
+
+  class Order {
+    +orderNo string
+    +status string = draft
+    +totalAmount number
+    +checkout(payment: Payment) boolean
+    -calculateTotal() number
+  }
+
+  class OrderItem {
+    +sku string
+    +quantity number = 1
+    +unitPrice number
+    +subtotal() number
+  }
+
+  class Coupon {
+    +code string
+    +discountRate number
+    +isExpired() boolean
+  }
+
+  class Payment {
+    <<abstract>>
+    +amount number
+    +*authorize() boolean
+  }
+
+  class CreditCardPayment {
+    -cardToken string
+    +authorize() boolean
+  }
+
+  class Notifier {
+    <<interface>>
+    +send(to: string, message: string) boolean
+  }
+
+  class EmailNotifier {
+    +send(to: string, message: string) boolean
+  }

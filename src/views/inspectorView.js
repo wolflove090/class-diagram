@@ -43,10 +43,22 @@ class InspectorView {
       if (classNode) this.renderClass(classNode);
       return;
     }
+    if (selection.type === "classes") {
+      this.renderClassGroup(selection.ids, state.classes);
+      return;
+    }
     if (selection.type === "relationship") {
       const relationship = state.relationships.find((item) => item.id === selection.id);
       if (relationship) this.renderRelationship(relationship, state.classes);
     }
+  }
+
+  renderClassGroup(classIds, classes) {
+    const selected = classes.filter((classNode) => classIds.includes(classNode.id));
+    this.root.append(
+      createElement("h2", {}, ["クラス複数選択"]),
+      createElement("p", { class: "muted" }, [`${selected.length} 件のクラスを選択中です。ドラッグでまとめて移動できます。`])
+    );
   }
 
   renderClass(classNode) {

@@ -47,6 +47,10 @@ class SvgRenderer {
     for (const classNode of state.classes) {
       this.viewportGroup.append(this.renderClassNode(classNode, state.selection));
     }
+
+    if (this.drag?.type === "select") {
+      this.viewportGroup.append(this.renderSelectionRect(this.drag.start, this.drag.current));
+    }
   }
 
   createDefs() {
@@ -93,7 +97,7 @@ class SvgRenderer {
   }
 
   renderClassNode(classNode, selection) {
-    const selected = selection?.type === "class" && selection.id === classNode.id;
+    const selected = isClassSelected(selection, classNode.id);
     const width = Math.max(220, classNode.size.width);
     const height = this.measureClassHeight(classNode);
     const group = createSvgElement("g", {
@@ -137,11 +141,18 @@ class SvgRenderer {
       }
     }
     group.addEventListener("pointerdown", (event) => this.startClassPointer(event, classNode));
-    group.addEventListener("click", (event) => {
-      event.stopPropagation();
-      this.handlers.onClassClick?.(classNode.id);
-    });
     return group;
+  }
+
+  renderSelectionRect(start, current) {
+    const bounds = rectFromPoints(start, current);
+    return createSvgElement("rect", {
+      class: "selection-marquee",
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height
+    });
   }
 
   renderRelationship(relationship, source, target, selection) {
@@ -193,32 +204,62 @@ class SvgRenderer {
   bindPointerEvents() {
     this.svg.addEventListener("pointerdown", (event) => {
       if (event.target !== this.svg) return;
+      event.preventDefault();
+      if (event.button === 1 || event.altKey) {
+        this.drag = {
+          type: "pan",
+          pointerId: event.pointerId,
+          start: { x: event.clientX, y: event.clientY },
+          viewport: { ...this.state.viewport }
+        };
+        clearBrowserSelection();
+        this.svg.setPointerCapture(event.pointerId);
+        return;
+      }
+      const start = this.toDiagramPoint({ x: event.clientX, y: event.clientY });
       this.drag = {
-        type: "pan",
+        type: "select",
         pointerId: event.pointerId,
-        start: { x: event.clientX, y: event.clientY },
-        viewport: { ...this.state.viewport }
+        start,
+        current: start,
+        moved: false
       };
+      clearBrowserSelection();
       this.svg.setPointerCapture(event.pointerId);
-      this.handlers.onCanvasClick?.();
     });
     this.svg.addEventListener("pointermove", (event) => this.handlePointerMove(event));
     this.svg.addEventListener("pointerup", (event) => this.endPointer(event));
     this.svg.addEventListener("wheel", (event) => {
       event.preventDefault();
+      if (!this.state?.viewport) return;
+      if (!event.ctrlKey) {
+        this.handlers.onViewportChange?.({
+          x: this.state.viewport.x - event.deltaX,
+          y: this.state.viewport.y - event.deltaY
+        });
+        return;
+      }
       const direction = event.deltaY > 0 ? -1 : 1;
       this.handlers.onZoom?.(direction, { x: event.clientX, y: event.clientY });
     }, { passive: false });
   }
 
   startClassPointer(event, classNode) {
+    event.preventDefault();
     event.stopPropagation();
+    clearBrowserSelection();
+    const selectedIds = getSelectedClassIds(this.state.selection);
+    const draggedIds = selectedIds.includes(classNode.id) ? selectedIds : [classNode.id];
     this.drag = {
       type: "class",
       pointerId: event.pointerId,
       classId: classNode.id,
+      classIds: draggedIds,
       start: this.toDiagramPoint({ x: event.clientX, y: event.clientY }),
-      position: { ...classNode.position },
+      positions: new Map(draggedIds.map((id) => {
+        const node = this.state.classes.find((item) => item.id === id);
+        return [id, { ...node.position }];
+      })),
       moved: false
     };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -226,6 +267,8 @@ class SvgRenderer {
 
   handlePointerMove(event) {
     if (!this.drag || event.pointerId !== this.drag.pointerId) return;
+    event.preventDefault();
+    clearBrowserSelection();
     if (this.drag.type === "pan") {
       const dx = event.clientX - this.drag.start.x;
       const dy = event.clientY - this.drag.start.y;
@@ -236,18 +279,41 @@ class SvgRenderer {
     const dx = point.x - this.drag.start.x;
     const dy = point.y - this.drag.start.y;
     if (Math.abs(dx) + Math.abs(dy) > 2) this.drag.moved = true;
-    this.handlers.onClassDrag?.(this.drag.classId, {
-      x: this.drag.position.x + dx,
-      y: this.drag.position.y + dy
-    });
+    if (this.drag.type === "select") {
+      this.drag.current = point;
+      this.render(this.state);
+      return;
+    }
+    this.handlers.onClassDrag?.(this.drag.classIds.map((id) => {
+      const position = this.drag.positions.get(id);
+      return { id, position: { x: position.x + dx, y: position.y + dy } };
+    }));
   }
 
   endPointer(event) {
     if (!this.drag || event.pointerId !== this.drag.pointerId) return;
-    if (this.drag.type === "class" && !this.drag.moved) {
-      this.handlers.onClassClick?.(this.drag.classId);
-    }
+    const drag = this.drag;
     this.drag = null;
+    if (drag.type === "class" && !drag.moved) {
+      if (drag.classIds.length === 1) this.handlers.onClassClick?.(drag.classId);
+      return;
+    }
+    if (drag.type === "class") {
+      this.handlers.onClassDragEnd?.(drag.classIds);
+      return;
+    }
+    if (drag.type === "select") {
+      if (!drag.moved) {
+        this.handlers.onCanvasClick?.();
+        return;
+      }
+      const bounds = rectFromPoints(drag.start, drag.current);
+      const ids = this.state.classes
+        .filter((classNode) => intersects(bounds, classBounds(classNode, this.measureClassHeight(classNode))))
+        .map((classNode) => classNode.id);
+      this.handlers.onClassRangeSelect?.(ids);
+      this.render(this.state);
+    }
   }
 
   toDiagramPoint(point) {
@@ -259,12 +325,56 @@ class SvgRenderer {
   }
 }
 
+function clearBrowserSelection() {
+  const selection = window.getSelection?.();
+  if (selection && selection.rangeCount > 0) selection.removeAllRanges();
+}
+
 function formatProperty(property) {
   const visibility = visibilitySymbols[property.visibility] ?? "+";
   const flags = [property.isStatic ? "$" : "", property.isAbstract ? "*" : "", property.isReadonly ? "readonly " : ""].join("");
   const type = property.type ? `: ${property.type}` : "";
   const defaultValue = property.defaultValue ? ` = ${property.defaultValue}` : "";
   return `${visibility} ${flags}${property.name}${type}${defaultValue}`;
+}
+
+function isClassSelected(selection, classId) {
+  if (selection?.type === "class") return selection.id === classId;
+  if (selection?.type === "classes") return selection.ids.includes(classId);
+  return false;
+}
+
+function getSelectedClassIds(selection) {
+  if (selection?.type === "class") return [selection.id];
+  if (selection?.type === "classes") return selection.ids;
+  return [];
+}
+
+function rectFromPoints(start, current) {
+  const x = Math.min(start.x, current.x);
+  const y = Math.min(start.y, current.y);
+  return {
+    x,
+    y,
+    width: Math.abs(current.x - start.x),
+    height: Math.abs(current.y - start.y)
+  };
+}
+
+function classBounds(classNode, height) {
+  return {
+    x: classNode.position.x,
+    y: classNode.position.y,
+    width: Math.max(220, classNode.size.width),
+    height
+  };
+}
+
+function intersects(a, b) {
+  return a.x <= b.x + b.width
+    && a.x + a.width >= b.x
+    && a.y <= b.y + b.height
+    && a.y + a.height >= b.y;
 }
 
 function formatMethod(method) {

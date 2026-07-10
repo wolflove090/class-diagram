@@ -49,6 +49,20 @@ class DiagramModel {
     state.relationships = state.relationships
       .filter((relationship) => ids.has(relationship.sourceClassId) && ids.has(relationship.targetClassId))
       .map((relationship) => this.createRelationship(relationship));
+    if (state.selection?.type === "class" && !ids.has(state.selection.id)) {
+      state.selection = null;
+    }
+    if (state.selection?.type === "classes") {
+      const selectionIds = Array.isArray(state.selection.ids) ? state.selection.ids.filter((id) => ids.has(id)) : [];
+      state.selection = selectionIds.length > 1
+        ? { type: "classes", ids: selectionIds }
+        : selectionIds.length === 1
+          ? { type: "class", id: selectionIds[0] }
+          : null;
+    }
+    if (state.selection?.type === "relationship" && !state.relationships.some((relationship) => relationship.id === state.selection.id)) {
+      state.selection = null;
+    }
     return state;
   }
 
