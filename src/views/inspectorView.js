@@ -25,6 +25,8 @@ class InspectorView {
   constructor(rootElement) {
     this.root = rootElement;
     this.handlers = {};
+    this.isCollapsed = false;
+    this.lastState = null;
   }
 
   bindEvents(handlers) {
@@ -32,10 +34,15 @@ class InspectorView {
   }
 
   render(state) {
+    this.lastState = state;
+    this.syncCollapsedClass();
     clearChildren(this.root);
+    this.root.append(this.renderHeader(this.getTitle(state)));
+    if (this.isCollapsed) return;
+
     const selection = state.selection;
     if (!selection) {
-      this.root.append(createElement("h2", {}, ["インスペクター"]), createElement("p", { class: "muted" }, ["クラスまたは接続線を選択してください。"]));
+      this.root.append(createElement("p", { class: "muted" }, ["クラスまたは接続線を選択してください。"]));
       return;
     }
     if (selection.type === "class") {
@@ -56,7 +63,6 @@ class InspectorView {
   renderClassGroup(classIds, classes) {
     const selected = classes.filter((classNode) => classIds.includes(classNode.id));
     this.root.append(
-      createElement("h2", {}, ["クラス複数選択"]),
       createElement("p", { class: "muted" }, [`${selected.length} 件のクラスを選択中です。ドラッグでまとめて移動できます。`])
     );
   }
@@ -64,7 +70,6 @@ class InspectorView {
   renderClass(classNode) {
     const form = createElement("form", { class: "inspector-form" });
     form.append(
-      createElement("h2", {}, ["クラス"]),
       field("名前", createElement("input", { name: "name", value: classNode.name })),
       field("種別", select("kind", classKindOptions, classNode.kind)),
       field("ステレオタイプ", createElement("input", { name: "stereotype", value: classNode.stereotype })),
@@ -164,7 +169,6 @@ class InspectorView {
   renderRelationship(relationship, classes) {
     const form = createElement("form", { class: "inspector-form" });
     form.append(
-      createElement("h2", {}, ["関係"]),
       field("種別", select("type", relationshipOptions, relationship.type)),
       field("接続元", select("sourceClassId", classes.map((classNode) => [classNode.id, classNode.name]), relationship.sourceClassId)),
       field("接続先", select("targetClassId", classes.map((classNode) => [classNode.id, classNode.name]), relationship.targetClassId)),
@@ -186,6 +190,38 @@ class InspectorView {
       });
     });
     this.root.append(form);
+  }
+
+  renderHeader(title) {
+    const label = this.isCollapsed ? "▶︎" : `◀︎ ${title}`;
+    return createElement("h2", { class: "inspector-heading" }, [
+      createElement("button", {
+        type: "button",
+        class: "inspector-toggle",
+        "aria-expanded": String(!this.isCollapsed),
+        "aria-label": this.isCollapsed ? "インスペクターを展開" : "インスペクターを折りたたみ",
+        onclick: () => this.toggleCollapsed()
+      }, [label])
+    ]);
+  }
+
+  getTitle(state) {
+    const selection = state.selection;
+    if (!selection) return "インスペクター";
+    if (selection.type === "class") return "クラス";
+    if (selection.type === "classes") return "クラス複数選択";
+    if (selection.type === "relationship") return "関係";
+    return "インスペクター";
+  }
+
+  toggleCollapsed() {
+    this.isCollapsed = !this.isCollapsed;
+    if (this.lastState) this.render(this.lastState);
+  }
+
+  syncCollapsedClass() {
+    this.root.classList.toggle("is-collapsed", this.isCollapsed);
+    this.root.parentElement?.classList.toggle("inspector-collapsed", this.isCollapsed);
   }
 
   submitProperty(form, classId, propertyId) {

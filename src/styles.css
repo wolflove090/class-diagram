@@ -106,9 +106,14 @@ textarea {
 }
 
 .app-shell {
+  --inspector-width: 340px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) var(--inspector-width);
   height: calc(100vh - 55px);
+}
+
+.app-shell.inspector-collapsed {
+  --inspector-width: 44px;
 }
 
 .viewer {
@@ -148,7 +153,37 @@ textarea {
   background: #ffffff;
 }
 
-.inspector h2,
+.inspector-heading {
+  margin: 0 0 12px;
+}
+
+.inspector-toggle {
+  width: 100%;
+  border: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+  text-align: left;
+}
+
+.inspector-toggle:hover {
+  color: var(--accent);
+}
+
+.inspector.is-collapsed {
+  overflow: hidden;
+  padding: 14px 8px;
+}
+
+.inspector.is-collapsed .inspector-heading {
+  margin: 0;
+}
+
+.inspector.is-collapsed .inspector-toggle {
+  text-align: center;
+}
+
 .inspector h3 {
   margin: 0 0 12px;
 }
