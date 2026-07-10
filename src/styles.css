@@ -237,6 +237,30 @@ textarea {
   stroke-width: 2.4;
 }
 
+.class-node .resize-handle {
+  fill: #ffffff;
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  filter: none;
+  pointer-events: all;
+}
+
+.class-node .resize-handle.east {
+  cursor: ew-resize;
+}
+
+.class-node .resize-handle.south {
+  cursor: ns-resize;
+}
+
+.class-node .resize-handle.south-east {
+  cursor: nwse-resize;
+}
+
+.class-node .resize-handle:hover {
+  fill: #eff6ff;
+}
+
 .class-title {
   font-weight: 700;
   dominant-baseline: middle;

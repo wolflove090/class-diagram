@@ -1,5 +1,10 @@
 let nextId = Date.now();
 
+const CLASS_MIN_SIZE = {
+  width: 180,
+  height: 110
+};
+
 function createId(prefix) {
   nextId += 1;
   return `${prefix}_${nextId.toString(36)}`;
@@ -41,7 +46,7 @@ class DiagramModel {
       visibility: classNode.visibility || "public",
       isAbstract: Boolean(classNode.isAbstract),
       position: { x: Number(classNode.position?.x ?? 120), y: Number(classNode.position?.y ?? 100) },
-      size: { width: Number(classNode.size?.width ?? 220), height: Number(classNode.size?.height ?? 150) },
+      size: this.normalizeClassSize(classNode.size),
       properties: Array.isArray(classNode.properties) ? classNode.properties.map((property) => this.createProperty(property)) : [],
       methods: Array.isArray(classNode.methods) ? classNode.methods.map((method) => this.createMethod(method)) : []
     }));
@@ -75,9 +80,16 @@ class DiagramModel {
       visibility: input.visibility ?? "public",
       isAbstract: Boolean(input.isAbstract),
       position: input.position ?? { x: 120, y: 100 },
-      size: input.size ?? { width: 230, height: 150 },
+      size: this.normalizeClassSize(input.size ?? { width: 230, height: 150 }),
       properties: (input.properties ?? []).map((property) => this.createProperty(property)),
       methods: (input.methods ?? []).map((method) => this.createMethod(method))
+    };
+  }
+
+  normalizeClassSize(size = {}) {
+    return {
+      width: Math.max(CLASS_MIN_SIZE.width, Number(size.width ?? 230)),
+      height: Math.max(CLASS_MIN_SIZE.height, Number(size.height ?? 150))
     };
   }
 

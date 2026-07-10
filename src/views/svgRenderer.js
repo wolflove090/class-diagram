@@ -7,6 +7,9 @@ const relationshipMarker = {
   composition: "composition"
 };
 
+const ZOOM_WHEEL_SENSITIVITY = 0.5;
+const ZOOM_WHEEL_MAX_DELTA = 120;
+
 class SvgRenderer {
   constructor(svgElement) {
     this.svg = svgElement;
@@ -98,8 +101,7 @@ class SvgRenderer {
 
   renderClassNode(classNode, selection) {
     const selected = isClassSelected(selection, classNode.id);
-    const width = Math.max(220, classNode.size.width);
-    const height = this.measureClassHeight(classNode);
+    const { width, height } = this.getClassRenderSize(classNode);
     const group = createSvgElement("g", {
       class: `class-node${selected ? " selected" : ""}${this.connectSourceId === classNode.id ? " connect-source" : ""}`,
       transform: `translate(${classNode.position.x} ${classNode.position.y})`,
@@ -141,7 +143,55 @@ class SvgRenderer {
       }
     }
     group.addEventListener("pointerdown", (event) => this.startClassPointer(event, classNode));
+    if (selection?.type === "class" && selection.id === classNode.id) {
+      group.append(this.renderResizeHandles(classNode, { width, height }));
+    }
     return group;
+  }
+
+  renderResizeHandles(classNode, size) {
+    const handles = createSvgElement("g", { class: "resize-handles" });
+    const handleSpecs = [
+      {
+        direction: "east",
+        x: size.width - 5,
+        y: size.height / 2 - 14,
+        width: 10,
+        height: 28,
+        className: "resize-handle east"
+      },
+      {
+        direction: "south",
+        x: size.width / 2 - 14,
+        y: size.height - 5,
+        width: 28,
+        height: 10,
+        className: "resize-handle south"
+      },
+      {
+        direction: "south-east",
+        x: size.width - 10,
+        y: size.height - 10,
+        width: 14,
+        height: 14,
+        className: "resize-handle south-east"
+      }
+    ];
+
+    for (const spec of handleSpecs) {
+      const handle = createSvgElement("rect", {
+        x: spec.x,
+        y: spec.y,
+        width: spec.width,
+        height: spec.height,
+        rx: 3,
+        class: spec.className
+      });
+      handle.addEventListener("pointerdown", (event) => this.startResizePointer(event, classNode, spec.direction));
+      handles.append(handle);
+    }
+
+    return handles;
   }
 
   renderSelectionRect(start, current) {
@@ -180,17 +230,20 @@ class SvgRenderer {
 
   relationshipPath(source, target) {
     if (source.id === target.id) {
-      const x = source.position.x + source.size.width;
+      const sourceSize = this.getClassRenderSize(source);
+      const x = source.position.x + sourceSize.width;
       const y = source.position.y + 35;
       return {
         d: `M ${x} ${y} C ${x + 80} ${y - 60}, ${x + 90} ${y + 100}, ${x} ${y + 90}`,
         label: { x: x + 70, y: y + 24 }
       };
     }
-    const sourceCenter = centerOf(source);
-    const targetCenter = centerOf(target);
-    const start = edgePoint(source, targetCenter);
-    const end = edgePoint(target, sourceCenter);
+    const sourceSize = this.getClassRenderSize(source);
+    const targetSize = this.getClassRenderSize(target);
+    const sourceCenter = centerOf(source, sourceSize);
+    const targetCenter = centerOf(target, targetSize);
+    const start = edgePoint(source, sourceSize, targetCenter);
+    const end = edgePoint(target, targetSize, sourceCenter);
     return {
       d: `M ${start.x} ${start.y} L ${end.x} ${end.y}`,
       label: { x: (start.x + end.x) / 2 + 8, y: (start.y + end.y) / 2 - 8 }
@@ -199,6 +252,17 @@ class SvgRenderer {
 
   measureClassHeight(classNode) {
     return 88 + Math.max(1, classNode.properties.length) * 20 + Math.max(1, classNode.methods.length) * 20;
+  }
+
+  getClassRenderSize(classNode) {
+    return {
+      width: Math.max(CLASS_MIN_SIZE.width, Number(classNode.size?.width ?? 230)),
+      height: Math.max(
+        CLASS_MIN_SIZE.height,
+        Number(classNode.size?.height ?? 150),
+        this.measureClassHeight(classNode)
+      )
+    };
   }
 
   bindPointerEvents() {
@@ -232,15 +296,16 @@ class SvgRenderer {
     this.svg.addEventListener("wheel", (event) => {
       event.preventDefault();
       if (!this.state?.viewport) return;
-      if (!event.ctrlKey) {
+      if (!event.metaKey && !event.ctrlKey) {
         this.handlers.onViewportChange?.({
           x: this.state.viewport.x - event.deltaX,
           y: this.state.viewport.y - event.deltaY
         });
         return;
       }
-      const direction = event.deltaY > 0 ? -1 : 1;
-      this.handlers.onZoom?.(direction, { x: event.clientX, y: event.clientY });
+      const delta = clamp(normalizeWheelDelta(event), -ZOOM_WHEEL_MAX_DELTA, ZOOM_WHEEL_MAX_DELTA);
+      const scale = this.state.viewport.scale * Math.exp(-delta / ZOOM_WHEEL_MAX_DELTA * ZOOM_WHEEL_SENSITIVITY);
+      this.handlers.onZoom?.({ scale }, { x: event.clientX, y: event.clientY });
     }, { passive: false });
   }
 
@@ -265,6 +330,22 @@ class SvgRenderer {
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
+  startResizePointer(event, classNode, direction) {
+    event.preventDefault();
+    event.stopPropagation();
+    clearBrowserSelection();
+    this.drag = {
+      type: "resize",
+      pointerId: event.pointerId,
+      classId: classNode.id,
+      direction,
+      start: this.toDiagramPoint({ x: event.clientX, y: event.clientY }),
+      size: { ...classNode.size },
+      moved: false
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
   handlePointerMove(event) {
     if (!this.drag || event.pointerId !== this.drag.pointerId) return;
     event.preventDefault();
@@ -282,6 +363,18 @@ class SvgRenderer {
     if (this.drag.type === "select") {
       this.drag.current = point;
       this.render(this.state);
+      return;
+    }
+    if (this.drag.type === "resize") {
+      const nextSize = {
+        width: this.drag.direction.includes("east")
+          ? Math.max(CLASS_MIN_SIZE.width, this.drag.size.width + dx)
+          : this.drag.size.width,
+        height: this.drag.direction.includes("south")
+          ? Math.max(CLASS_MIN_SIZE.height, this.drag.size.height + dy)
+          : this.drag.size.height
+      };
+      this.handlers.onClassResize?.(this.drag.classId, nextSize);
       return;
     }
     this.handlers.onClassDrag?.(this.drag.classIds.map((id) => {
@@ -302,6 +395,10 @@ class SvgRenderer {
       this.handlers.onClassDragEnd?.(drag.classIds);
       return;
     }
+    if (drag.type === "resize") {
+      this.handlers.onClassResizeEnd?.(drag.classId, drag.moved);
+      return;
+    }
     if (drag.type === "select") {
       if (!drag.moved) {
         this.handlers.onCanvasClick?.();
@@ -309,7 +406,7 @@ class SvgRenderer {
       }
       const bounds = rectFromPoints(drag.start, drag.current);
       const ids = this.state.classes
-        .filter((classNode) => intersects(bounds, classBounds(classNode, this.measureClassHeight(classNode))))
+        .filter((classNode) => intersects(bounds, classBounds(classNode, this.getClassRenderSize(classNode))))
         .map((classNode) => classNode.id);
       this.handlers.onClassRangeSelect?.(ids);
       this.render(this.state);
@@ -328,6 +425,16 @@ class SvgRenderer {
 function clearBrowserSelection() {
   const selection = window.getSelection?.();
   if (selection && selection.rangeCount > 0) selection.removeAllRanges();
+}
+
+function normalizeWheelDelta(event) {
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * 16;
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaY * window.innerHeight;
+  return event.deltaY;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function formatProperty(property) {
@@ -361,12 +468,12 @@ function rectFromPoints(start, current) {
   };
 }
 
-function classBounds(classNode, height) {
+function classBounds(classNode, size) {
   return {
     x: classNode.position.x,
     y: classNode.position.y,
-    width: Math.max(220, classNode.size.width),
-    height
+    width: size.width,
+    height: size.height
   };
 }
 
@@ -387,19 +494,19 @@ function formatMethod(method) {
   return `${visibility} ${flags}${method.name}(${params})${type}`;
 }
 
-function centerOf(classNode) {
+function centerOf(classNode, size) {
   return {
-    x: classNode.position.x + classNode.size.width / 2,
-    y: classNode.position.y + classNode.size.height / 2
+    x: classNode.position.x + size.width / 2,
+    y: classNode.position.y + size.height / 2
   };
 }
 
-function edgePoint(classNode, toward) {
-  const center = centerOf(classNode);
+function edgePoint(classNode, size, toward) {
+  const center = centerOf(classNode, size);
   const dx = toward.x - center.x;
   const dy = toward.y - center.y;
-  const halfWidth = classNode.size.width / 2;
-  const halfHeight = classNode.size.height / 2;
+  const halfWidth = size.width / 2;
+  const halfHeight = size.height / 2;
   const scale = Math.max(Math.abs(dx) / halfWidth, Math.abs(dy) / halfHeight, 1);
   return {
     x: center.x + dx / scale,

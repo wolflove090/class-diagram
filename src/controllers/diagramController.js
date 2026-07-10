@@ -85,8 +85,10 @@ class DiagramController {
         this.selectClasses(classIds);
         this.save();
       },
+      onClassResize: (classId, size) => this.updateClassSize(classId, size),
+      onClassResizeEnd: (classId, moved) => this.finishClassResize(classId, moved),
       onViewportChange: (viewport) => this.updateState(this.model.updateViewport(this.state, viewport), false),
-      onZoom: (direction) => this.zoom(direction)
+      onZoom: (request, center) => this.zoom(request, center)
     });
     this.inspector.bindEvents({
       onClassUpdate: (id, patch) => this.updateState(this.model.updateClass(this.state, id, patch)),
@@ -175,6 +177,14 @@ class DiagramController {
     this.updateState(nextState, false, false);
   }
 
+  updateClassSize(classId, size) {
+    this.updateState(this.model.updateClass(this.state, classId, { size }), false, false);
+  }
+
+  finishClassResize(classId, moved) {
+    this.updateState(this.model.select(this.state, { type: "class", id: classId }), moved, true);
+  }
+
   updateClassList(classId, key, updater) {
     const classNode = this.state.classes.find((item) => item.id === classId);
     if (!classNode) return;
@@ -193,9 +203,25 @@ class DiagramController {
     }
   }
 
-  zoom(direction) {
-    const nextScale = Math.min(2.5, Math.max(0.35, this.state.viewport.scale + direction * 0.1));
-    this.updateState(this.model.updateViewport(this.state, { scale: nextScale }), false);
+  zoom(request, center = null) {
+    const currentViewport = this.state.viewport;
+    const requestedScale = typeof request === "number"
+      ? currentViewport.scale + request * 0.1
+      : Number(request?.scale ?? currentViewport.scale);
+    const nextScale = Math.min(2.5, Math.max(0.35, requestedScale));
+    const viewportPatch = { scale: nextScale };
+
+    if (center) {
+      const rect = this.elements.svg.getBoundingClientRect();
+      const localX = center.x - rect.left;
+      const localY = center.y - rect.top;
+      const diagramX = (localX - currentViewport.x) / currentViewport.scale;
+      const diagramY = (localY - currentViewport.y) / currentViewport.scale;
+      viewportPatch.x = localX - diagramX * nextScale;
+      viewportPatch.y = localY - diagramY * nextScale;
+    }
+
+    this.updateState(this.model.updateViewport(this.state, viewportPatch), false);
   }
 
   updateState(nextState, shouldSave = true, renderInspector = true) {
