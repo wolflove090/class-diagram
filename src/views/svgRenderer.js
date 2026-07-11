@@ -251,7 +251,7 @@ class SvgRenderer {
   }
 
   measureClassHeight(classNode) {
-    return 88 + Math.max(1, classNode.properties.length) * 20 + Math.max(1, classNode.methods.length) * 20;
+    return measureClassContentHeight(classNode);
   }
 
   getClassRenderSize(classNode) {
@@ -438,11 +438,7 @@ function clamp(value, min, max) {
 }
 
 function formatProperty(property) {
-  const visibility = visibilitySymbols[property.visibility] ?? "+";
-  const flags = [property.isStatic ? "$" : "", property.isAbstract ? "*" : "", property.isReadonly ? "readonly " : ""].join("");
-  const type = property.type ? `: ${property.type}` : "";
-  const defaultValue = property.defaultValue ? ` = ${property.defaultValue}` : "";
-  return `${visibility} ${flags}${property.name}${type}${defaultValue}`;
+  return formatClassProperty(property);
 }
 
 function isClassSelected(selection, classId) {
@@ -485,13 +481,7 @@ function intersects(a, b) {
 }
 
 function formatMethod(method) {
-  const visibility = visibilitySymbols[method.visibility] ?? "+";
-  const params = method.parameters.map((parameter) => (
-    `${parameter.name}${parameter.isOptional ? "?" : ""}${parameter.type ? `: ${parameter.type}` : ""}`
-  )).join(", ");
-  const type = method.returnType ? `: ${method.returnType}` : "";
-  const flags = [method.isStatic ? "$" : "", method.isAbstract ? "*" : "", method.isAsync ? "async " : ""].join("");
-  return `${visibility} ${flags}${method.name}(${params})${type}`;
+  return formatClassMethod(method);
 }
 
 function centerOf(classNode, size) {

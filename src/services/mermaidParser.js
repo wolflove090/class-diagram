@@ -79,6 +79,10 @@ class MermaidParser {
     if (state.classes.length === 0 && state.relationships.length === 0) {
       throw new Error("読み取れるクラス図情報がありません。");
     }
+    state.classes = state.classes.map((classNode) => ({
+      ...classNode,
+      size: measureClassPreferredSize(classNode)
+    }));
     return state;
   }
 }
