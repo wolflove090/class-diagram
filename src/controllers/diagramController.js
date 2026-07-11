@@ -34,8 +34,8 @@ class DiagramController {
 
   seedInitialState() {
     let state = this.model.createInitialState();
-    state = this.model.addClass(state, { name: "User", position: { x: 100, y: 90 } });
-    state = this.model.addClass(state, { name: "Order", position: { x: 420, y: 260 } });
+    state = this.model.addClass(state, { name: "User", position: { x: 96, y: 96 } });
+    state = this.model.addClass(state, { name: "Order", position: { x: 432, y: 264 } });
     const user = state.classes[0];
     const order = state.classes[1];
     state = this.model.updateClass(state, user.id, {
@@ -56,6 +56,7 @@ class DiagramController {
     this.elements.connectModeButton.addEventListener("click", () => this.toggleConnectMode());
     this.elements.undoButton.addEventListener("click", () => this.undo());
     this.elements.deleteButton.addEventListener("click", () => this.deleteSelected());
+    this.elements.alignGridButton.addEventListener("click", () => this.alignSelectionToGrid());
     this.elements.importButton.addEventListener("click", () => this.modal.showImport());
     this.elements.exportButton.addEventListener("click", () => this.modal.showExport(this.serializer.serialize(this.state)));
     this.elements.zoomInButton.addEventListener("click", () => this.zoom(1));
@@ -123,7 +124,7 @@ class DiagramController {
   addClass() {
     const x = (160 - this.state.viewport.x) / this.state.viewport.scale + this.state.classes.length * 18;
     const y = (120 - this.state.viewport.y) / this.state.viewport.scale + this.state.classes.length * 18;
-    this.updateState(this.model.addClass(this.state, { position: { x, y } }));
+    this.updateState(this.model.addClass(this.state, { position: this.model.snapPointToGrid({ x, y }) }));
   }
 
   toggleConnectMode() {
@@ -183,14 +184,14 @@ class DiagramController {
   updateClassPositions(positions) {
     this.capturePendingHistory();
     const nextState = positions.reduce((state, item) => (
-      this.model.updateClass(state, item.id, { position: item.position })
+      this.model.updateClass(state, item.id, { position: this.model.snapPointToGrid(item.position) })
     ), this.state);
     this.updateState(nextState, false, false);
   }
 
   updateClassSize(classId, size) {
     this.capturePendingHistory();
-    this.updateState(this.model.updateClass(this.state, classId, { size }), false, false);
+    this.updateState(this.model.updateClass(this.state, classId, { size: this.model.snapSizeToGrid(size) }), false, false);
   }
 
   finishClassResize(classId, moved) {
@@ -215,12 +216,24 @@ class DiagramController {
       const state = parsed.hasLayoutMetadata
         ? normalized
         : this.layout.applyInitialLayout(normalized);
-      this.updateState(state);
+      this.updateState(this.model.snapClassesToGrid(state));
       this.modal.close();
       this.notice("インポートしました");
     } catch (error) {
       this.modal.showError(error.message || "Mermaid を読み取れませんでした。");
     }
+  }
+
+  alignSelectionToGrid() {
+    const selection = this.state.selection;
+    const classIds = selection?.type === "class"
+      ? [selection.id]
+      : selection?.type === "classes"
+        ? selection.ids
+        : null;
+    const nextState = this.model.snapClassesToGrid(this.state, classIds);
+    this.updateState(nextState);
+    this.notice(classIds ? "選択クラスをグリッドに整列しました" : "全クラスをグリッドに整列しました");
   }
 
   zoom(request, center = null) {

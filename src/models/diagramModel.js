@@ -4,6 +4,7 @@ const CLASS_MIN_SIZE = {
   width: 180,
   height: 110
 };
+const DIAGRAM_GRID_SIZE = 24;
 
 function createId(prefix) {
   nextId += 1;
@@ -90,6 +91,45 @@ class DiagramModel {
     return {
       width: Math.max(CLASS_MIN_SIZE.width, Number(size.width ?? 230)),
       height: Math.max(CLASS_MIN_SIZE.height, Number(size.height ?? 150))
+    };
+  }
+
+  snapNumberToGrid(value, gridSize = DIAGRAM_GRID_SIZE) {
+    return Math.round(Number(value ?? 0) / gridSize) * gridSize;
+  }
+
+  snapPointToGrid(point, gridSize = DIAGRAM_GRID_SIZE) {
+    return {
+      x: this.snapNumberToGrid(point?.x, gridSize),
+      y: this.snapNumberToGrid(point?.y, gridSize)
+    };
+  }
+
+  snapSizeToGrid(size, gridSize = DIAGRAM_GRID_SIZE) {
+    const normalized = this.normalizeClassSize(size);
+    return this.normalizeClassSize({
+      width: this.snapNumberToGrid(normalized.width, gridSize),
+      height: this.snapNumberToGrid(normalized.height, gridSize)
+    });
+  }
+
+  snapClassToGrid(classNode, gridSize = DIAGRAM_GRID_SIZE) {
+    return {
+      ...classNode,
+      position: this.snapPointToGrid(classNode.position, gridSize),
+      size: this.snapSizeToGrid(classNode.size, gridSize)
+    };
+  }
+
+  snapClassesToGrid(state, classIds = null, gridSize = DIAGRAM_GRID_SIZE) {
+    const targetIds = classIds ? new Set(classIds) : null;
+    return {
+      ...state,
+      classes: state.classes.map((classNode) => (
+        !targetIds || targetIds.has(classNode.id)
+          ? this.snapClassToGrid(classNode, gridSize)
+          : classNode
+      ))
     };
   }
 

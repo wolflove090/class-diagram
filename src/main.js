@@ -6,6 +6,7 @@ const controller = new DiagramController({
   connectModeButton: document.querySelector("#connect-mode-button"),
   undoButton: document.querySelector("#undo-button"),
   deleteButton: document.querySelector("#delete-button"),
+  alignGridButton: document.querySelector("#align-grid-button"),
   importButton: document.querySelector("#import-button"),
   exportButton: document.querySelector("#export-button"),
   zoomInButton: document.querySelector("#zoom-in-button"),

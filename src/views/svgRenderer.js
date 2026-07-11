@@ -33,6 +33,7 @@ class SvgRenderer {
   render(state, options = {}) {
     this.state = state;
     this.connectSourceId = options.connectSourceId ?? this.connectSourceId;
+    this.syncGridBackground(state.viewport);
     clearChildren(this.svg);
     this.svg.append(this.createDefs(), this.viewportGroup);
     clearChildren(this.viewportGroup);
@@ -54,6 +55,14 @@ class SvgRenderer {
     if (this.drag?.type === "select") {
       this.viewportGroup.append(this.renderSelectionRect(this.drag.start, this.drag.current));
     }
+  }
+
+  syncGridBackground(viewport) {
+    const scale = Number(viewport?.scale ?? 1);
+    const gridSize = DIAGRAM_GRID_SIZE * scale;
+    this.svg.style.setProperty("--grid-size", `${gridSize}px`);
+    this.svg.style.setProperty("--grid-offset-x", `${Number(viewport?.x ?? 0)}px`);
+    this.svg.style.setProperty("--grid-offset-y", `${Number(viewport?.y ?? 0)}px`);
   }
 
   createDefs() {
@@ -255,13 +264,15 @@ class SvgRenderer {
   }
 
   getClassRenderSize(classNode) {
+    const width = Math.max(CLASS_MIN_SIZE.width, Number(classNode.size?.width ?? 230));
+    const height = Math.max(
+      CLASS_MIN_SIZE.height,
+      Number(classNode.size?.height ?? 150),
+      this.measureClassHeight(classNode)
+    );
     return {
-      width: Math.max(CLASS_MIN_SIZE.width, Number(classNode.size?.width ?? 230)),
-      height: Math.max(
-        CLASS_MIN_SIZE.height,
-        Number(classNode.size?.height ?? 150),
-        this.measureClassHeight(classNode)
-      )
+      width: Math.ceil(width / DIAGRAM_GRID_SIZE) * DIAGRAM_GRID_SIZE,
+      height: Math.ceil(height / DIAGRAM_GRID_SIZE) * DIAGRAM_GRID_SIZE
     };
   }
 
