@@ -194,7 +194,10 @@ class DiagramController {
   importMermaid(text) {
     try {
       const parsed = this.parser.parse(text);
-      const state = this.layout.applyInitialLayout(this.model.normalizeState(parsed));
+      const normalized = this.model.normalizeState(parsed);
+      const state = parsed.hasLayoutMetadata
+        ? normalized
+        : this.layout.applyInitialLayout(normalized);
       this.updateState(state);
       this.modal.close();
       this.notice("インポートしました");

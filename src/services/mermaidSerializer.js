@@ -31,6 +31,18 @@ class MermaidSerializer {
       }
       lines.push("  }");
     }
+    if (state.classes.length > 0) {
+      lines.push("");
+      for (const classNode of state.classes) {
+        lines.push(`%% @design-maker:class ${JSON.stringify({
+          mermaidName: safeName(classNode.name),
+          name: classNode.name,
+          position: classNode.position,
+          size: classNode.size
+        })}`);
+      }
+      lines.push(`%% @design-maker:viewport ${JSON.stringify(state.viewport)}`);
+    }
     return lines.join("\n");
   }
 }

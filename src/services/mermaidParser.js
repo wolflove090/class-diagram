@@ -22,10 +22,11 @@ class MermaidParser {
   parse(text) {
     const state = this.model.createInitialState();
     const classMap = new Map();
-    const lines = String(text || "")
+    const rawLines = String(text || "")
       .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("%%"));
+      .map((line) => line.trim());
+    const layoutMetadata = parseLayoutMetadata(rawLines);
+    const lines = rawLines.filter((line) => line && !line.startsWith("%%"));
 
     let currentClass = null;
     let sawHeader = false;
@@ -83,8 +84,64 @@ class MermaidParser {
       ...classNode,
       size: measureClassPreferredSize(classNode)
     }));
+    state.hasLayoutMetadata = applyLayoutMetadata(state, layoutMetadata);
     return state;
   }
+}
+
+function parseLayoutMetadata(lines) {
+  const metadata = { classes: new Map(), viewport: null };
+  for (const line of lines) {
+    const match = line.match(/^%%\s*@design-maker:(class|viewport)\s+(.+?)\s*$/);
+    if (!match) continue;
+    try {
+      const value = JSON.parse(match[2]);
+      if (match[1] === "class" && isValidClassLayout(value)) {
+        metadata.classes.set(value.mermaidName, value);
+      }
+      if (match[1] === "viewport" && isValidViewport(value)) {
+        metadata.viewport = value;
+      }
+    } catch {
+      // Invalid metadata is optional, so normal Mermaid import can continue.
+    }
+  }
+  return metadata;
+}
+
+function applyLayoutMetadata(state, metadata) {
+  let applied = false;
+  state.classes = state.classes.map((classNode) => {
+    const layout = metadata.classes.get(classNode.name);
+    if (!layout) return classNode;
+    applied = true;
+    return {
+      ...classNode,
+      name: layout.name || classNode.name,
+      position: layout.position,
+      size: layout.size
+    };
+  });
+  if (metadata.viewport) state.viewport = metadata.viewport;
+  return applied;
+}
+
+function isValidClassLayout(value) {
+  return typeof value?.mermaidName === "string"
+    && isFinitePoint(value.position)
+    && isFiniteSize(value.size);
+}
+
+function isValidViewport(value) {
+  return isFinitePoint(value) && Number.isFinite(Number(value.scale));
+}
+
+function isFinitePoint(value) {
+  return Number.isFinite(Number(value?.x)) && Number.isFinite(Number(value?.y));
+}
+
+function isFiniteSize(value) {
+  return Number.isFinite(Number(value?.width)) && Number.isFinite(Number(value?.height));
 }
 
 function ensureClass(state, classMap, rawName, model) {
