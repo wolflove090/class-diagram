@@ -12,6 +12,8 @@ class DiagramController {
     this.state = this.model.createInitialState();
     this.connectMode = false;
     this.connectSourceId = null;
+    this.undoStack = [];
+    this.pendingHistoryState = null;
   }
 
   init() {
@@ -49,6 +51,7 @@ class DiagramController {
   bindToolbar() {
     this.elements.addClassButton.addEventListener("click", () => this.addClass());
     this.elements.connectModeButton.addEventListener("click", () => this.toggleConnectMode());
+    this.elements.undoButton.addEventListener("click", () => this.undo());
     this.elements.deleteButton.addEventListener("click", () => this.deleteSelected());
     this.elements.importButton.addEventListener("click", () => this.modal.showImport());
     this.elements.exportButton.addEventListener("click", () => this.modal.showExport(this.serializer.serialize(this.state)));
@@ -60,12 +63,17 @@ class DiagramController {
         this.storage.clear();
         this.connectSourceId = null;
         this.connectMode = false;
-        this.state = this.model.createInitialState();
-        this.render();
+        this.updateState(this.model.createInitialState());
         this.notice("クリアしました");
       });
     });
     window.addEventListener("keydown", (event) => {
+      const isUndo = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z" && !event.shiftKey;
+      if (isUndo && !isTextEditingElement(document.activeElement)) {
+        event.preventDefault();
+        this.undo();
+        return;
+      }
       if (event.key === "Delete" || event.key === "Backspace") {
         if (!["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
           this.deleteSelected();
@@ -83,7 +91,7 @@ class DiagramController {
       onClassDrag: (positions) => this.updateClassPositions(positions),
       onClassDragEnd: (classIds) => {
         this.selectClasses(classIds);
-        this.save();
+        this.commitPendingHistory();
       },
       onClassResize: (classId, size) => this.updateClassSize(classId, size),
       onClassResizeEnd: (classId, moved) => this.finishClassResize(classId, moved),
@@ -171,6 +179,7 @@ class DiagramController {
   }
 
   updateClassPositions(positions) {
+    this.capturePendingHistory();
     const nextState = positions.reduce((state, item) => (
       this.model.updateClass(state, item.id, { position: item.position })
     ), this.state);
@@ -178,11 +187,17 @@ class DiagramController {
   }
 
   updateClassSize(classId, size) {
+    this.capturePendingHistory();
     this.updateState(this.model.updateClass(this.state, classId, { size }), false, false);
   }
 
   finishClassResize(classId, moved) {
-    this.updateState(this.model.select(this.state, { type: "class", id: classId }), moved, true);
+    this.updateState(this.model.select(this.state, { type: "class", id: classId }), moved, true, false);
+    if (moved) {
+      this.commitPendingHistory();
+    } else {
+      this.pendingHistoryState = null;
+    }
   }
 
   updateClassList(classId, key, updater) {
@@ -227,20 +242,71 @@ class DiagramController {
     this.updateState(this.model.updateViewport(this.state, viewportPatch), false);
   }
 
-  updateState(nextState, shouldSave = true, renderInspector = true) {
+  updateState(nextState, shouldSave = true, renderInspector = true, trackHistory = shouldSave) {
+    const previousState = this.state;
     this.state = this.model.normalizeState(nextState);
+    if (trackHistory && !this.areStatesEqual(previousState, this.state)) {
+      this.undoStack.push(this.cloneState(previousState));
+      this.pendingHistoryState = null;
+    }
     this.render(renderInspector);
     if (shouldSave) this.save();
+  }
+
+  undo() {
+    const previousState = this.undoStack.pop();
+    if (!previousState) return;
+    this.connectMode = false;
+    this.connectSourceId = null;
+    this.pendingHistoryState = null;
+    this.elements.connectModeButton.setAttribute("aria-pressed", "false");
+    this.state = this.model.normalizeState(previousState);
+    this.render();
+    this.save();
+    this.notice("元に戻しました");
+  }
+
+  capturePendingHistory() {
+    if (!this.pendingHistoryState) {
+      this.pendingHistoryState = this.cloneState(this.state);
+    }
+  }
+
+  commitPendingHistory() {
+    if (!this.pendingHistoryState) {
+      this.save();
+      return;
+    }
+    if (!this.areStatesEqual(this.pendingHistoryState, this.state)) {
+      this.undoStack.push(this.pendingHistoryState);
+    }
+    this.pendingHistoryState = null;
+    this.render(false);
+    this.save();
+  }
+
+  cloneState(state) {
+    return JSON.parse(JSON.stringify(state));
+  }
+
+  areStatesEqual(a, b) {
+    return JSON.stringify(a) === JSON.stringify(b);
   }
 
   save() {
     const result = this.storage.save(this.state);
     if (!result.ok) this.notice("保存できませんでした");
+    this.updateUndoButton();
   }
 
   render(renderInspector = true) {
     this.renderer.render(this.state, { connectSourceId: this.connectSourceId });
     if (renderInspector) this.inspector.render(this.state);
+    this.updateUndoButton();
+  }
+
+  updateUndoButton() {
+    this.elements.undoButton.disabled = this.undoStack.length === 0;
   }
 
   notice(message) {
@@ -259,4 +325,8 @@ function moveItem(items, itemId, direction) {
   if (index < 0 || target < 0 || target >= next.length) return items;
   [next[index], next[target]] = [next[target], next[index]];
   return next;
+}
+
+function isTextEditingElement(element) {
+  return ["INPUT", "TEXTAREA", "SELECT"].includes(element?.tagName) || element?.isContentEditable;
 }

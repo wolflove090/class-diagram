@@ -4,6 +4,7 @@ const controller = new DiagramController({
   modalRoot: document.querySelector("#modal-root"),
   addClassButton: document.querySelector("#add-class-button"),
   connectModeButton: document.querySelector("#connect-mode-button"),
+  undoButton: document.querySelector("#undo-button"),
   deleteButton: document.querySelector("#delete-button"),
   importButton: document.querySelector("#import-button"),
   exportButton: document.querySelector("#export-button"),
