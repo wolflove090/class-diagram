@@ -8,7 +8,6 @@ const controller = new DiagramController({
   deleteButton: document.querySelector("#delete-button"),
   importButton: document.querySelector("#import-button"),
   exportButton: document.querySelector("#export-button"),
-  resetViewButton: document.querySelector("#reset-view-button"),
   zoomInButton: document.querySelector("#zoom-in-button"),
   zoomOutButton: document.querySelector("#zoom-out-button"),
   clearButton: document.querySelector("#clear-button"),

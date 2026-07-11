@@ -1,3 +1,6 @@
+const VIEWPORT_MIN_SCALE = 0.1;
+const VIEWPORT_MAX_SCALE = 2.5;
+
 class DiagramController {
   constructor(elements) {
     this.elements = elements;
@@ -55,7 +58,6 @@ class DiagramController {
     this.elements.deleteButton.addEventListener("click", () => this.deleteSelected());
     this.elements.importButton.addEventListener("click", () => this.modal.showImport());
     this.elements.exportButton.addEventListener("click", () => this.modal.showExport(this.serializer.serialize(this.state)));
-    this.elements.resetViewButton.addEventListener("click", () => this.updateState(this.model.updateViewport(this.state, { x: 0, y: 0, scale: 1 })));
     this.elements.zoomInButton.addEventListener("click", () => this.zoom(1));
     this.elements.zoomOutButton.addEventListener("click", () => this.zoom(-1));
     this.elements.clearButton.addEventListener("click", () => {
@@ -226,7 +228,7 @@ class DiagramController {
     const requestedScale = typeof request === "number"
       ? currentViewport.scale + request * 0.1
       : Number(request?.scale ?? currentViewport.scale);
-    const nextScale = Math.min(2.5, Math.max(0.35, requestedScale));
+    const nextScale = Math.min(VIEWPORT_MAX_SCALE, Math.max(VIEWPORT_MIN_SCALE, requestedScale));
     const viewportPatch = { scale: nextScale };
 
     if (center) {
