@@ -17,3 +17,9 @@ const controller = new DiagramController({
 });
 
 controller.init();
+
+const analytics = new AnalyticsService({
+  endpointUrl: "https://script.google.com/macros/s/AKfycbzfbpLNq94kQKRfr4m94dq75J63aRL_C2B2Qpf5uL_wg-eVj5U1fUV-If7H79IONxMI3w/exec"
+});
+
+analytics.trackPageView();
