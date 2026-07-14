@@ -267,6 +267,29 @@ textarea {
   cursor: move;
 }
 
+.diagram-group {
+  cursor: move;
+}
+
+.diagram-group rect {
+  fill: rgb(99 102 241 / 0.06);
+  stroke: #818cf8;
+  stroke-width: 1.5;
+  stroke-dasharray: 7 5;
+}
+
+.diagram-group.selected rect {
+  fill: rgb(37 99 235 / 0.12);
+  stroke: var(--accent);
+  stroke-width: 2.4;
+}
+
+.diagram-group-label {
+  fill: #3730a3;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .class-node rect {
   fill: #ffffff;
   stroke: #344054;

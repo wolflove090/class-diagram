@@ -21,20 +21,16 @@ class MermaidSerializer {
       const label = relationship.label ? ` : ${relationship.label}` : "";
       lines.push(`  ${safeName(source.name)}${sourceMultiplicity} ${relationshipSyntax[relationship.type] ?? "-->"}${targetMultiplicity} ${safeName(target.name)}${label}`);
     }
-    for (const classNode of state.classes) {
-      if (classNode.kind === "interface") lines.push(`  class ${safeName(classNode.name)}:::interface`);
-      lines.push(`  class ${safeName(classNode.name)} {`);
-      if (classNode.stereotype || classNode.kind !== "class") {
-        lines.push(`    <<${classNode.stereotype || classNode.kind}>>`);
+    const groups = Array.isArray(state.groups) ? state.groups : [];
+    const classOwners = new Map();
+    for (const group of groups) {
+      for (const classId of group.classIds) {
+        if (!classOwners.has(classId)) classOwners.set(classId, group.id);
       }
-      for (const property of classNode.properties) {
-        lines.push(`    ${serializeProperty(property)}`);
-      }
-      for (const method of classNode.methods) {
-        lines.push(`    ${serializeMethod(method)}`);
-      }
-      lines.push("  }");
     }
+    const roots = groups.filter((group) => !group.parentId || !groups.some((item) => item.id === group.parentId));
+    for (const classNode of state.classes.filter((item) => !classOwners.has(item.id))) serializeClass(lines, classNode, 1);
+    for (const group of roots) serializeGroup(lines, group, groups, state.classes, classOwners, 1);
     if (state.classes.length > 0) {
       lines.push("");
       for (const classNode of state.classes) {
@@ -49,6 +45,33 @@ class MermaidSerializer {
     }
     return lines.join("\n");
   }
+}
+
+function serializeGroup(lines, group, groups, classes, classOwners, indent) {
+  const prefix = "  ".repeat(indent);
+  const label = group.label && group.label !== group.name ? `["${escapeLabel(group.label)}"]` : "";
+  lines.push(`${prefix}namespace ${safeName(group.name)}${label} {`);
+  for (const classNode of classes.filter((item) => classOwners.get(item.id) === group.id)) {
+    serializeClass(lines, classNode, indent + 1);
+  }
+  for (const child of groups.filter((item) => item.parentId === group.id)) {
+    serializeGroup(lines, child, groups, classes, classOwners, indent + 1);
+  }
+  lines.push(`${prefix}}`);
+}
+
+function serializeClass(lines, classNode, indent) {
+  const prefix = "  ".repeat(indent);
+  if (classNode.kind === "interface") lines.push(`${prefix}class ${safeName(classNode.name)}:::interface`);
+  lines.push(`${prefix}class ${safeName(classNode.name)} {`);
+  if (classNode.stereotype || classNode.kind !== "class") lines.push(`${prefix}  <<${classNode.stereotype || classNode.kind}>>`);
+  for (const property of classNode.properties) lines.push(`${prefix}  ${serializeProperty(property)}`);
+  for (const method of classNode.methods) lines.push(`${prefix}  ${serializeMethod(method)}`);
+  lines.push(`${prefix}}`);
+}
+
+function escapeLabel(value) {
+  return String(value).replace(/"/g, "\\\"");
 }
 
 function serializeProperty(property) {

@@ -53,6 +53,7 @@ class DiagramController {
 
   bindToolbar() {
     this.elements.addClassButton.addEventListener("click", () => this.addClass());
+    this.elements.addGroupButton.addEventListener("click", () => this.addGroup());
     this.elements.connectModeButton.addEventListener("click", () => this.toggleConnectMode());
     this.elements.undoButton.addEventListener("click", () => this.undo());
     this.elements.deleteButton.addEventListener("click", () => this.deleteSelected());
@@ -88,12 +89,18 @@ class DiagramController {
   bindViews() {
     this.renderer.bindEvents({
       onClassClick: (classId) => this.handleClassClick(classId),
+      onGroupClick: (groupId) => this.updateState(this.model.select(this.state, { type: "group", id: groupId }), false),
       onRelationshipClick: (relationshipId) => this.updateState(this.model.select(this.state, { type: "relationship", id: relationshipId }), false),
       onCanvasClick: () => this.updateState(this.model.select(this.state, null), false),
       onClassRangeSelect: (classIds) => this.selectClasses(classIds),
       onClassDrag: (positions) => this.updateClassPositions(positions),
       onClassDragEnd: (classIds) => {
         this.selectClasses(classIds);
+        this.commitPendingHistory();
+      },
+      onGroupDrag: (positions) => this.updateClassPositions(positions),
+      onGroupDragEnd: (groupId) => {
+        this.updateState(this.model.select(this.state, { type: "group", id: groupId }), false, true, false);
         this.commitPendingHistory();
       },
       onClassResize: (classId, size) => this.updateClassSize(classId, size),
@@ -103,6 +110,7 @@ class DiagramController {
     });
     this.inspector.bindEvents({
       onClassUpdate: (id, patch) => this.updateState(this.model.updateClass(this.state, id, patch)),
+      onGroupUpdate: (id, patch) => this.updateState(this.model.updateGroup(this.state, id, patch)),
       onRelationshipUpdate: (id, patch) => this.updateState(this.model.updateRelationship(this.state, id, patch)),
       onPropertyAdd: (classId) => this.updateClassList(classId, "properties", (items) => [...items, this.model.createProperty()]),
       onPropertyUpdate: (classId, propertyId, patch) => this.updateClassList(classId, "properties", (items) => items.map((item) => item.id === propertyId ? { ...item, ...patch } : item)),
@@ -125,6 +133,20 @@ class DiagramController {
     const x = (160 - this.state.viewport.x) / this.state.viewport.scale + this.state.classes.length * 18;
     const y = (120 - this.state.viewport.y) / this.state.viewport.scale + this.state.classes.length * 18;
     this.updateState(this.model.addClass(this.state, { position: this.model.snapPointToGrid({ x, y }) }));
+  }
+
+  addGroup() {
+    const classIds = this.state.selection?.type === "class"
+      ? [this.state.selection.id]
+      : this.state.selection?.type === "classes"
+        ? this.state.selection.ids
+        : [];
+    if (classIds.length === 0) {
+      this.notice("グループ化するクラスを選択してください");
+      return;
+    }
+    const number = this.state.groups.length + 1;
+    this.updateState(this.model.addGroup(this.state, { name: `Group${number}`, label: `グループ ${number}`, classIds }));
   }
 
   toggleConnectMode() {
@@ -164,6 +186,8 @@ class DiagramController {
       this.updateState(this.model.removeClass(this.state, this.state.selection.id));
     } else if (this.state.selection.type === "classes") {
       this.updateState(this.state.selection.ids.reduce((state, classId) => this.model.removeClass(state, classId), this.state));
+    } else if (this.state.selection.type === "group") {
+      this.updateState(this.model.removeGroup(this.state, this.state.selection.id));
     } else {
       this.updateState(this.model.removeRelationship(this.state, this.state.selection.id));
     }

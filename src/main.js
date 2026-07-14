@@ -3,6 +3,7 @@ const controller = new DiagramController({
   inspector: document.querySelector("#inspector"),
   modalRoot: document.querySelector("#modal-root"),
   addClassButton: document.querySelector("#add-class-button"),
+  addGroupButton: document.querySelector("#add-group-button"),
   connectModeButton: document.querySelector("#connect-mode-button"),
   undoButton: document.querySelector("#undo-button"),
   deleteButton: document.querySelector("#delete-button"),

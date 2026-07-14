@@ -44,6 +44,12 @@ class SvgRenderer {
       `translate(${state.viewport.x} ${state.viewport.y}) scale(${state.viewport.scale})`
     );
 
+    const groupBounds = this.getGroupBounds(state);
+    for (const group of state.groups ?? []) {
+      const bounds = groupBounds.get(group.id);
+      if (bounds) this.viewportGroup.append(this.renderGroup(group, bounds, state.selection));
+    }
+
     for (const relationship of state.relationships) {
       const source = state.classes.find((classNode) => classNode.id === relationship.sourceClassId);
       const target = state.classes.find((classNode) => classNode.id === relationship.targetClassId);
@@ -57,6 +63,54 @@ class SvgRenderer {
     if (this.drag?.type === "select") {
       this.viewportGroup.append(this.renderSelectionRect(this.drag.start, this.drag.current));
     }
+  }
+
+  getGroupBounds(state) {
+    const groups = state.groups ?? [];
+    const byId = new Map(groups.map((group) => [group.id, group]));
+    const bounds = new Map();
+    const calculating = new Set();
+    const calculate = (group) => {
+      if (bounds.has(group.id)) return bounds.get(group.id);
+      if (calculating.has(group.id)) return null;
+      calculating.add(group.id);
+      const items = [];
+      for (const classId of group.classIds) {
+        const classNode = state.classes.find((item) => item.id === classId);
+        if (classNode) items.push(classBounds(classNode, this.getClassRenderSize(classNode)));
+      }
+      for (const child of groups.filter((item) => item.parentId === group.id)) {
+        const childBounds = calculate(child);
+        if (childBounds) items.push(childBounds);
+      }
+      if (items.length === 0) {
+        calculating.delete(group.id);
+        return null;
+      }
+      const minX = Math.min(...items.map((item) => item.x));
+      const minY = Math.min(...items.map((item) => item.y));
+      const maxX = Math.max(...items.map((item) => item.x + item.width));
+      const maxY = Math.max(...items.map((item) => item.y + item.height));
+      const value = { x: minX - 28, y: minY - 52, width: maxX - minX + 56, height: maxY - minY + 80 };
+      bounds.set(group.id, value);
+      calculating.delete(group.id);
+      return value;
+    };
+    for (const group of byId.values()) calculate(group);
+    return bounds;
+  }
+
+  renderGroup(group, bounds, selection) {
+    const selected = selection?.type === "group" && selection.id === group.id;
+    const element = createSvgElement("g", { class: `diagram-group${selected ? " selected" : ""}`, dataset: { groupId: group.id } });
+    element.append(
+      createSvgElement("rect", { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height, rx: 8 }),
+      createSvgElement("text", { x: bounds.x + 14, y: bounds.y + 28, class: "diagram-group-label" }, [group.label])
+    );
+    element.addEventListener("pointerdown", (event) => {
+      this.startGroupPointer(event, group);
+    });
+    return element;
   }
 
   syncGridBackground(viewport) {
@@ -345,6 +399,26 @@ class SvgRenderer {
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
+  startGroupPointer(event, group) {
+    event.preventDefault();
+    event.stopPropagation();
+    clearBrowserSelection();
+    const classIds = getGroupClassIds(this.state.groups ?? [], group.id);
+    this.drag = {
+      type: "group",
+      pointerId: event.pointerId,
+      groupId: group.id,
+      classIds,
+      start: this.toDiagramPoint({ x: event.clientX, y: event.clientY }),
+      positions: new Map(classIds.map((id) => {
+        const classNode = this.state.classes.find((item) => item.id === id);
+        return [id, { ...classNode.position }];
+      })),
+      moved: false
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
   startResizePointer(event, classNode, direction) {
     event.preventDefault();
     event.stopPropagation();
@@ -392,6 +466,13 @@ class SvgRenderer {
       this.handlers.onClassResize?.(this.drag.classId, nextSize);
       return;
     }
+    if (this.drag.type === "group") {
+      this.handlers.onGroupDrag?.(this.drag.classIds.map((id) => {
+        const position = this.drag.positions.get(id);
+        return { id, position: { x: position.x + dx, y: position.y + dy } };
+      }));
+      return;
+    }
     this.handlers.onClassDrag?.(this.drag.classIds.map((id) => {
       const position = this.drag.positions.get(id);
       return { id, position: { x: position.x + dx, y: position.y + dy } };
@@ -408,6 +489,11 @@ class SvgRenderer {
     }
     if (drag.type === "class") {
       this.handlers.onClassDragEnd?.(drag.classIds);
+      return;
+    }
+    if (drag.type === "group") {
+      if (drag.moved) this.handlers.onGroupDragEnd?.(drag.groupId);
+      else this.handlers.onGroupClick?.(drag.groupId);
       return;
     }
     if (drag.type === "resize") {
@@ -466,6 +552,21 @@ function getSelectedClassIds(selection) {
   if (selection?.type === "class") return [selection.id];
   if (selection?.type === "classes") return selection.ids;
   return [];
+}
+
+function getGroupClassIds(groups, groupId) {
+  const result = new Set();
+  const visited = new Set();
+  const collect = (id) => {
+    if (visited.has(id)) return;
+    visited.add(id);
+    const group = groups.find((item) => item.id === id);
+    if (!group) return;
+    for (const classId of group.classIds) result.add(classId);
+    for (const child of groups.filter((item) => item.parentId === id)) collect(child.id);
+  };
+  collect(groupId);
+  return [...result];
 }
 
 function rectFromPoints(start, current) {

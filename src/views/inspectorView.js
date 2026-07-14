@@ -56,6 +56,11 @@ class InspectorView {
       this.renderClassGroup(selection.ids, state.classes);
       return;
     }
+    if (selection.type === "group") {
+      const group = state.groups.find((item) => item.id === selection.id);
+      if (group) this.renderGroup(group, state.classes);
+      return;
+    }
     if (selection.type === "relationship") {
       const relationship = state.relationships.find((item) => item.id === selection.id);
       if (relationship) this.renderRelationship(relationship, state.classes);
@@ -94,6 +99,24 @@ class InspectorView {
     this.root.append(form);
     this.root.append(this.renderProperties(classNode));
     this.root.append(this.renderMethods(classNode));
+  }
+
+  renderGroup(group, classes) {
+    const memberCount = group.classIds.filter((id) => classes.some((item) => item.id === id)).length;
+    const form = createElement("form", { class: "inspector-form" });
+    form.append(
+      field("内部ID", createElement("input", { name: "name", value: group.name })),
+      field("表示ラベル", createElement("input", { name: "label", value: group.label })),
+      createElement("p", { class: "muted" }, [`${memberCount} 件のクラスに合わせて領域を自動調整します。`]),
+      createElement("button", { type: "submit" }, ["グループを更新"])
+    );
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      const name = data.get("name").trim() || "Group";
+      this.handlers.onGroupUpdate?.(group.id, { name, label: data.get("label").trim() || name });
+    });
+    this.root.append(form);
   }
 
   renderProperties(classNode) {
@@ -213,6 +236,7 @@ class InspectorView {
     if (selection.type === "class") return "クラス";
     if (selection.type === "classes") return "クラス複数選択";
     if (selection.type === "relationship") return "関係";
+    if (selection.type === "group") return "グループ";
     return "インスペクター";
   }
 

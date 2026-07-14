@@ -1,0 +1,45 @@
+classDiagram
+  %% namespace グループ表示確認用
+  %% Mermaid v11.15.0+ のラベル付き namespace を使用
+
+  namespace Web["Web フロントエンド"] {
+    class OrderPage {
+      +showOrder(id: string) void
+    }
+    class ApiClient {
+      +getOrder(id: string) OrderDto
+    }
+  }
+
+  namespace Platform["プラットフォーム"] {
+    class OrderService {
+      +findOrder(id: string) OrderDto
+    }
+
+    namespace Auth["認証・認可"] {
+      class AuthService {
+        +verify(token: string) User
+      }
+      class TokenService {
+        +issue(userId: string) string
+      }
+    }
+
+    namespace Data["データアクセス"] {
+      class OrderRepository {
+        +findById(id: string) Order
+      }
+      class Order {
+        +id string
+        +status string
+        +totalAmount number
+      }
+    }
+  }
+
+  OrderPage --> ApiClient : uses
+  ApiClient --> OrderService : requests
+  OrderService --> AuthService : authorizes
+  AuthService --> TokenService : validates
+  OrderService --> OrderRepository : loads
+  OrderRepository --> Order : returns

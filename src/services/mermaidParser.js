@@ -36,6 +36,8 @@ class MermaidParser {
   parse(text) {
     const state = this.model.createInitialState();
     const classMap = new Map();
+    const groupMap = new Map();
+    const namespaceStack = [];
     const rawLines = String(text || "").split(/\r?\n/).map((line) => line.trim());
     const layoutMetadata = parseLayoutMetadata(rawLines);
     const lines = rawLines.filter((line) => line && !line.startsWith("%%"));
@@ -47,24 +49,41 @@ class MermaidParser {
         sawHeader = true;
         continue;
       }
+      const namespaceStart = parseNamespaceStart(line);
+      if (namespaceStart) {
+        const parentId = namespaceStack.at(-1) ?? null;
+        const key = `${parentId ?? "root"}:${namespaceStart.name}`;
+        let group = groupMap.get(key);
+        if (!group) {
+          group = this.model.createGroup({ name: namespaceStart.name, label: namespaceStart.label, parentId });
+          state.groups.push(group);
+          groupMap.set(key, group);
+        }
+        namespaceStack.push(group.id);
+        continue;
+      }
       if (line === "}") {
-        currentClass = null;
+        if (currentClass) currentClass = null;
+        else namespaceStack.pop();
         continue;
       }
       const classStart = line.match(/^class\s+(.+?)\s*\{$/);
       if (classStart) {
         currentClass = ensureClass(state, classMap, classStart[1], this.model);
+        addClassToCurrentNamespace(currentClass, state.groups, namespaceStack);
         continue;
       }
       const inlineMember = line.match(/^([^\s:]+)\s*:\s*(.+)$/);
-      if (inlineMember && !line.startsWith("class ")) {
+      if (inlineMember && !currentClass && !line.startsWith("class ")) {
         const classNode = ensureClass(state, classMap, inlineMember[1], this.model);
+        addClassToCurrentNamespace(classNode, state.groups, namespaceStack);
         addMember(classNode, parseMember(inlineMember[2], this.model));
         continue;
       }
       const classSingle = line.match(/^class\s+(.+?)(?:\s+<<(.+)>>)?(?:\s*:::.+)?$/);
       if (classSingle && !line.includes("{")) {
         const classNode = ensureClass(state, classMap, classSingle[1], this.model);
+        addClassToCurrentNamespace(classNode, state.groups, namespaceStack);
         applyStereotype(classNode, classSingle[2]);
         continue;
       }
@@ -81,6 +100,8 @@ class MermaidParser {
       if (relationship) {
         const source = ensureClass(state, classMap, relationship.source, this.model);
         const target = ensureClass(state, classMap, relationship.target, this.model);
+        addClassToCurrentNamespace(source, state.groups, namespaceStack);
+        addClassToCurrentNamespace(target, state.groups, namespaceStack);
         state.relationships.push(this.model.createRelationship({
           sourceClassId: source.id,
           targetClassId: target.id,
@@ -151,6 +172,18 @@ function ensureClass(state, classMap, rawName, model) {
   state.classes.push(classNode);
   classMap.set(name, classNode);
   return classNode;
+}
+
+function parseNamespaceStart(line) {
+  const match = line.match(/^namespace\s+([^\s\[]+)(?:\["([^"]*)"\])?\s*\{$/);
+  return match ? { name: cleanName(match[1]), label: match[2] ?? cleanName(match[1]) } : null;
+}
+
+function addClassToCurrentNamespace(classNode, groups, namespaceStack) {
+  const groupId = namespaceStack.at(-1);
+  if (!groupId) return;
+  const group = groups.find((item) => item.id === groupId);
+  if (group && !group.classIds.includes(classNode.id)) group.classIds.push(classNode.id);
 }
 
 function cleanName(rawName) {

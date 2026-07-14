@@ -23,6 +23,7 @@ class DiagramModel {
     return {
       version: 1,
       classes: [],
+      groups: [],
       relationships: [],
       viewport: { x: 0, y: 0, scale: 1 },
       selection: null
@@ -35,6 +36,7 @@ class DiagramModel {
       ...base,
       ...input,
       classes: Array.isArray(input?.classes) ? input.classes : [],
+      groups: Array.isArray(input?.groups) ? input.groups : [],
       relationships: Array.isArray(input?.relationships) ? input.relationships : [],
       viewport: { ...base.viewport, ...(input?.viewport ?? {}) },
       selection: input?.selection ?? null
@@ -52,6 +54,18 @@ class DiagramModel {
       methods: Array.isArray(classNode.methods) ? classNode.methods.map((method) => this.createMethod(method)) : []
     }));
     const ids = new Set(state.classes.map((classNode) => classNode.id));
+    state.groups = state.groups.map((group) => ({
+      id: group.id ?? createId("group"),
+      name: group.name || "Group",
+      label: group.label || group.name || "Group",
+      parentId: group.parentId ?? null,
+      classIds: Array.isArray(group.classIds) ? [...new Set(group.classIds.filter((id) => ids.has(id)))] : []
+    }));
+    const groupIds = new Set(state.groups.map((group) => group.id));
+    state.groups = state.groups.map((group) => ({
+      ...group,
+      parentId: group.parentId && group.parentId !== group.id && groupIds.has(group.parentId) ? group.parentId : null
+    }));
     state.relationships = state.relationships
       .filter((relationship) => ids.has(relationship.sourceClassId) && ids.has(relationship.targetClassId))
       .map((relationship) => this.createRelationship(relationship));
@@ -69,6 +83,7 @@ class DiagramModel {
     if (state.selection?.type === "relationship" && !state.relationships.some((relationship) => relationship.id === state.selection.id)) {
       state.selection = null;
     }
+    if (state.selection?.type === "group" && !groupIds.has(state.selection.id)) state.selection = null;
     return state;
   }
 
@@ -84,6 +99,16 @@ class DiagramModel {
       size: this.normalizeClassSize(input.size ?? { width: 230, height: 150 }),
       properties: (input.properties ?? []).map((property) => this.createProperty(property)),
       methods: (input.methods ?? []).map((method) => this.createMethod(method))
+    };
+  }
+
+  createGroup(input = {}) {
+    return {
+      id: input.id ?? createId("group"),
+      name: input.name ?? "Group",
+      label: input.label ?? input.name ?? "Group",
+      parentId: input.parentId ?? null,
+      classIds: Array.isArray(input.classIds) ? [...new Set(input.classIds)] : []
     };
   }
 
@@ -205,11 +230,36 @@ class DiagramModel {
     return {
       ...state,
       classes: state.classes.filter((classNode) => classNode.id !== classId),
+      groups: state.groups.map((group) => ({ ...group, classIds: group.classIds.filter((id) => id !== classId) })),
       relationships: state.relationships.filter((relationship) => (
         relationship.sourceClassId !== classId && relationship.targetClassId !== classId
       )),
       selection: null
     };
+  }
+
+  addGroup(state, input = {}) {
+    const group = this.createGroup(input);
+    return { ...state, groups: [...state.groups, group], selection: { type: "group", id: group.id } };
+  }
+
+  updateGroup(state, groupId, patch) {
+    return { ...state, groups: state.groups.map((group) => group.id === groupId ? { ...group, ...patch } : group) };
+  }
+
+  removeGroup(state, groupId) {
+    const removedIds = new Set([groupId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const group of state.groups) {
+        if (group.parentId && removedIds.has(group.parentId) && !removedIds.has(group.id)) {
+          removedIds.add(group.id);
+          changed = true;
+        }
+      }
+    }
+    return { ...state, groups: state.groups.filter((group) => !removedIds.has(group.id)), selection: null };
   }
 
   addRelationship(state, input) {
