@@ -4,7 +4,9 @@ const relationshipMarker = {
   dependency: "arrow",
   association: "arrow",
   aggregation: "aggregation",
-  composition: "composition"
+  composition: "composition",
+  link: null,
+  dashedLink: null
 };
 
 const ZOOM_WHEEL_SENSITIVITY = 0.5;
@@ -221,9 +223,11 @@ class SvgRenderer {
     const marker = relationshipMarker[relationship.type] ?? "arrow";
     const lineAttrs = {
       d: path.d,
-      class: `relationship-line ${relationship.type}${selected ? " selected" : ""}`,
-      "marker-end": `url(#marker-${marker})`
+      class: `relationship-line ${relationship.type}${selected ? " selected" : ""}`
     };
+    if (marker) {
+      lineAttrs[["inheritance", "implementation", "aggregation", "composition"].includes(relationship.type) ? "marker-start" : "marker-end"] = `url(#marker-${marker})`;
+    }
     group.append(createSvgElement("path", lineAttrs));
     group.append(createSvgElement("path", { d: path.d, class: "relationship-hit" }));
     const label = [relationship.sourceMultiplicity, relationship.label, relationship.targetMultiplicity].filter(Boolean).join("  ");

@@ -18,7 +18,9 @@ const relationshipOptions = [
   ["dependency", "依存"],
   ["association", "関連"],
   ["aggregation", "集約"],
-  ["composition", "コンポジション"]
+  ["composition", "コンポジション"],
+  ["link", "実線リンク"],
+  ["dashedLink", "破線リンク"]
 ];
 
 class InspectorView {

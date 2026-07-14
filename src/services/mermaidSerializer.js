@@ -4,7 +4,9 @@ const relationshipSyntax = {
   dependency: "..>",
   association: "-->",
   aggregation: "o--",
-  composition: "*--"
+  composition: "*--",
+  link: "--",
+  dashedLink: ".."
 };
 
 class MermaidSerializer {
@@ -14,8 +16,10 @@ class MermaidSerializer {
       const source = state.classes.find((classNode) => classNode.id === relationship.sourceClassId);
       const target = state.classes.find((classNode) => classNode.id === relationship.targetClassId);
       if (!source || !target) continue;
+      const sourceMultiplicity = relationship.sourceMultiplicity ? ` \"${relationship.sourceMultiplicity}\"` : "";
+      const targetMultiplicity = relationship.targetMultiplicity ? ` \"${relationship.targetMultiplicity}\"` : "";
       const label = relationship.label ? ` : ${relationship.label}` : "";
-      lines.push(`  ${safeName(source.name)} ${relationshipSyntax[relationship.type] ?? "-->"} ${safeName(target.name)}${label}`);
+      lines.push(`  ${safeName(source.name)}${sourceMultiplicity} ${relationshipSyntax[relationship.type] ?? "-->"}${targetMultiplicity} ${safeName(target.name)}${label}`);
     }
     for (const classNode of state.classes) {
       if (classNode.kind === "interface") lines.push(`  class ${safeName(classNode.name)}:::interface`);
@@ -69,8 +73,8 @@ function serializeMethod(method) {
 
 function safeName(name) {
   const trimmed = String(name || "Class").trim();
-  if (/^[A-Za-z_\u00A0-\uFFFF][\w\u00A0-\uFFFF]*$/.test(trimmed)) return trimmed;
-  return trimmed.replace(/[^\w\u00A0-\uFFFF]/g, "_") || "Class";
+  if (/^[A-Za-z_\u00A0-\uFFFF][\w\-\u00A0-\uFFFF]*$/.test(trimmed)) return trimmed;
+  return trimmed.replace(/[^\w\-\u00A0-\uFFFF]/g, "_") || "Class";
 }
 
 function safeMember(name) {

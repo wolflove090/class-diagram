@@ -353,7 +353,8 @@ textarea {
 }
 
 .relationship-line.dependency,
-.relationship-line.implementation {
+.relationship-line.implementation,
+.relationship-line.dashedLink {
   stroke-dasharray: 7 5;
 }
 
