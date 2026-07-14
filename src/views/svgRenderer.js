@@ -34,7 +34,9 @@ class SvgRenderer {
 
   render(state, options = {}) {
     this.state = state;
-    this.connectSourceId = options.connectSourceId ?? this.connectSourceId;
+    if (Object.hasOwn(options, "connectSourceId")) {
+      this.connectSourceId = options.connectSourceId;
+    }
     this.syncGridBackground(state.viewport);
     clearChildren(this.svg);
     this.svg.append(this.createDefs(), this.viewportGroup);
