@@ -10,6 +10,7 @@ for (const file of ["src/models/diagramModel.js", "src/services/classSizeService
 }
 const MermaidParser = vm.runInContext("MermaidParser", context);
 const MermaidSerializer = vm.runInContext("MermaidSerializer", context);
+const DiagramModel = vm.runInContext("DiagramModel", context);
 const getGroupClassIds = vm.runInContext("getGroupClassIds", context);
 
 function relationshipByType(state, type) {
@@ -106,4 +107,54 @@ test("collects direct and nested group classes for group drag", () => {
     { id: "data", classIds: ["repository"], parentId: "platform" }
   ], "platform");
   assert.deepEqual(Array.from(ids).sort(), ["authService", "gateway", "repository", "tokenService"]);
+});
+
+test("reverses relationship endpoints and multiplicities without changing its identity", () => {
+  const model = new DiagramModel();
+  let state = model.createInitialState();
+  state = model.addClass(state, { id: "a", name: "A" });
+  state = model.addClass(state, { id: "b", name: "B" });
+  state = model.addRelationship(state, {
+    id: "rel",
+    sourceClassId: "a",
+    targetClassId: "b",
+    type: "association",
+    label: "uses",
+    sourceMultiplicity: "1",
+    targetMultiplicity: "0..*"
+  });
+
+  const reversed = model.reverseRelationship(state, "rel");
+  const relationship = reversed.relationships[0];
+  assert.equal(relationship.id, "rel");
+  assert.equal(relationship.sourceClassId, "b");
+  assert.equal(relationship.targetClassId, "a");
+  assert.equal(relationship.type, "association");
+  assert.equal(relationship.label, "uses");
+  assert.equal(relationship.sourceMultiplicity, "0..*");
+  assert.equal(relationship.targetMultiplicity, "1");
+});
+
+test("exports and reimports a reversed relationship", () => {
+  const model = new DiagramModel();
+  let state = model.createInitialState();
+  state = model.addClass(state, { id: "parent", name: "Parent" });
+  state = model.addClass(state, { id: "child", name: "Child" });
+  state = model.addRelationship(state, {
+    sourceClassId: "parent",
+    targetClassId: "child",
+    type: "association",
+    sourceMultiplicity: "1",
+    targetMultiplicity: "0..*"
+  });
+
+  const reversed = model.reverseRelationship(state, state.relationships[0].id);
+  const output = new MermaidSerializer().serialize(reversed);
+  assert.match(output, /Child "0\.\.\*" --> "1" Parent/);
+  const parsed = new MermaidParser().parse(output);
+  const relationship = parsed.relationships[0];
+  assert.equal(className(parsed, relationship.sourceClassId), "Child");
+  assert.equal(className(parsed, relationship.targetClassId), "Parent");
+  assert.equal(relationship.sourceMultiplicity, "0..*");
+  assert.equal(relationship.targetMultiplicity, "1");
 });

@@ -283,6 +283,21 @@ class DiagramModel {
     };
   }
 
+  reverseRelationship(state, relationshipId) {
+    return {
+      ...state,
+      relationships: state.relationships.map((relationship) => (
+        relationship.id !== relationshipId ? relationship : {
+          ...relationship,
+          sourceClassId: relationship.targetClassId,
+          targetClassId: relationship.sourceClassId,
+          sourceMultiplicity: relationship.targetMultiplicity,
+          targetMultiplicity: relationship.sourceMultiplicity
+        }
+      ))
+    };
+  }
+
   removeRelationship(state, relationshipId) {
     return {
       ...state,

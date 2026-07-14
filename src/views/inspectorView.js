@@ -200,6 +200,10 @@ class InspectorView {
       field("ラベル", createElement("input", { name: "label", value: relationship.label })),
       field("元多重度", createElement("input", { name: "sourceMultiplicity", value: relationship.sourceMultiplicity })),
       field("先多重度", createElement("input", { name: "targetMultiplicity", value: relationship.targetMultiplicity })),
+      createElement("button", {
+        type: "button",
+        onclick: () => this.handlers.onRelationshipReverse?.(relationship.id)
+      }, ["方向を反転"]),
       createElement("button", { type: "submit" }, ["関係を更新"])
     );
     form.addEventListener("submit", (event) => {

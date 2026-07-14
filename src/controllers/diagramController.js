@@ -112,6 +112,7 @@ class DiagramController {
       onClassUpdate: (id, patch) => this.updateState(this.model.updateClass(this.state, id, patch)),
       onGroupUpdate: (id, patch) => this.updateState(this.model.updateGroup(this.state, id, patch)),
       onRelationshipUpdate: (id, patch) => this.updateState(this.model.updateRelationship(this.state, id, patch)),
+      onRelationshipReverse: (id) => this.updateState(this.model.reverseRelationship(this.state, id)),
       onPropertyAdd: (classId) => this.updateClassList(classId, "properties", (items) => [...items, this.model.createProperty()]),
       onPropertyUpdate: (classId, propertyId, patch) => this.updateClassList(classId, "properties", (items) => items.map((item) => item.id === propertyId ? { ...item, ...patch } : item)),
       onPropertyDelete: (classId, propertyId) => this.updateClassList(classId, "properties", (items) => items.filter((item) => item.id !== propertyId)),
