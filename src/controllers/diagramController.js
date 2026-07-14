@@ -88,7 +88,7 @@ class DiagramController {
 
   bindViews() {
     this.renderer.bindEvents({
-      onClassClick: (classId) => this.handleClassClick(classId),
+      onClassClick: (classId, options) => this.handleClassClick(classId, options),
       onGroupClick: (groupId) => this.updateState(this.model.select(this.state, { type: "group", id: groupId }), false),
       onRelationshipClick: (relationshipId) => this.updateState(this.model.select(this.state, { type: "relationship", id: relationshipId }), false),
       onCanvasClick: () => this.updateState(this.model.select(this.state, null), false),
@@ -158,8 +158,20 @@ class DiagramController {
     this.render();
   }
 
-  handleClassClick(classId) {
+  handleClassClick(classId, { isMultiSelect = false } = {}) {
     if (!this.connectMode) {
+      if (isMultiSelect) {
+        const selectedIds = this.state.selection?.type === "class"
+          ? [this.state.selection.id]
+          : this.state.selection?.type === "classes"
+            ? this.state.selection.ids
+            : [];
+        const nextIds = selectedIds.includes(classId)
+          ? selectedIds.filter((id) => id !== classId)
+          : [...selectedIds, classId];
+        this.selectClasses(nextIds);
+        return;
+      }
       this.updateState(this.model.select(this.state, { type: "class", id: classId }), false);
       return;
     }

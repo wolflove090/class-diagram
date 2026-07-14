@@ -391,6 +391,7 @@ class SvgRenderer {
       pointerId: event.pointerId,
       classId: classNode.id,
       classIds: draggedIds,
+      isMultiSelect: event.metaKey,
       start: this.toDiagramPoint({ x: event.clientX, y: event.clientY }),
       positions: new Map(draggedIds.map((id) => {
         const node = this.state.classes.find((item) => item.id === id);
@@ -486,7 +487,9 @@ class SvgRenderer {
     const drag = this.drag;
     this.drag = null;
     if (drag.type === "class" && !drag.moved) {
-      if (drag.classIds.length === 1) this.handlers.onClassClick?.(drag.classId);
+      if (drag.classIds.length === 1 || drag.isMultiSelect) {
+        this.handlers.onClassClick?.(drag.classId, { isMultiSelect: drag.isMultiSelect });
+      }
       return;
     }
     if (drag.type === "class") {
